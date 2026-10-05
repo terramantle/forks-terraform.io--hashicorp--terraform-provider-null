@@ -6,11 +6,13 @@ import (
 )
 
 var NotFunc = function.New(&function.Spec{
+	Description: `Applies the logical NOT operation to the given boolean value.`,
 	Params: []function.Parameter{
 		{
 			Name:             "val",
 			Type:             cty.Bool,
 			AllowDynamicType: true,
+			AllowMarked:      true,
 		},
 	},
 	Type: function.StaticReturnType(cty.Bool),
@@ -20,16 +22,19 @@ var NotFunc = function.New(&function.Spec{
 })
 
 var AndFunc = function.New(&function.Spec{
+	Description: `Applies the logical AND operation to the given boolean values.`,
 	Params: []function.Parameter{
 		{
 			Name:             "a",
 			Type:             cty.Bool,
 			AllowDynamicType: true,
+			AllowMarked:      true,
 		},
 		{
 			Name:             "b",
 			Type:             cty.Bool,
 			AllowDynamicType: true,
+			AllowMarked:      true,
 		},
 	},
 	Type: function.StaticReturnType(cty.Bool),
@@ -39,16 +44,19 @@ var AndFunc = function.New(&function.Spec{
 })
 
 var OrFunc = function.New(&function.Spec{
+	Description: `Applies the logical OR operation to the given boolean values.`,
 	Params: []function.Parameter{
 		{
 			Name:             "a",
 			Type:             cty.Bool,
 			AllowDynamicType: true,
+			AllowMarked:      true,
 		},
 		{
 			Name:             "b",
 			Type:             cty.Bool,
 			AllowDynamicType: true,
+			AllowMarked:      true,
 		},
 	},
 	Type: function.StaticReturnType(cty.Bool),

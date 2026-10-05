@@ -1,3 +1,6 @@
+// Copyright IBM Corp. 2015, 2025
+// SPDX-License-Identifier: MPL-2.0
+
 package getter
 
 import (
@@ -8,15 +11,19 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	urlhelper "github.com/hashicorp/go-getter/helper/url"
-	safetemp "github.com/hashicorp/go-safetemp"
 )
 
 // HgGetter is a Getter implementation that will download a module from
 // a Mercurial repository.
 type HgGetter struct {
 	getter
+
+	// Timeout sets a deadline which all hg CLI operations should
+	// complete within. Zero value means no timeout.
+	Timeout time.Duration
 }
 
 func (g *HgGetter) ClientMode(_ *url.URL) (ClientMode, error) {
@@ -25,6 +32,13 @@ func (g *HgGetter) ClientMode(_ *url.URL) (ClientMode, error) {
 
 func (g *HgGetter) Get(dst string, u *url.URL) error {
 	ctx := g.Context()
+
+	if g.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, g.Timeout)
+		defer cancel()
+	}
+
 	if _, err := exec.LookPath("hg"); err != nil {
 		return fmt.Errorf("hg must be available and on the PATH")
 	}
@@ -53,12 +67,12 @@ func (g *HgGetter) Get(dst string, u *url.URL) error {
 		return err
 	}
 	if err != nil {
-		if err := g.clone(dst, newURL); err != nil {
+		if err := g.clone(ctx, dst, newURL); err != nil {
 			return err
 		}
 	}
 
-	if err := g.pull(dst, newURL); err != nil {
+	if err := g.pull(ctx, dst, newURL); err != nil {
 		return err
 	}
 
@@ -70,11 +84,11 @@ func (g *HgGetter) Get(dst string, u *url.URL) error {
 func (g *HgGetter) GetFile(dst string, u *url.URL) error {
 	// Create a temporary directory to store the full source. This has to be
 	// a non-existent directory.
-	td, tdcloser, err := safetemp.Dir("", "getter")
+	td, tdcloser, err := mkdirTemp("", "getter")
 	if err != nil {
 		return err
 	}
-	defer tdcloser.Close()
+	defer func() { _ = tdcloser.Close() }()
 
 	// Get the filename, and strip the filename from the URL so we can
 	// just get the repository directly.
@@ -101,13 +115,13 @@ func (g *HgGetter) GetFile(dst string, u *url.URL) error {
 	return fg.GetFile(dst, u)
 }
 
-func (g *HgGetter) clone(dst string, u *url.URL) error {
-	cmd := exec.Command("hg", "clone", "-U", u.String(), dst)
+func (g *HgGetter) clone(ctx context.Context, dst string, u *url.URL) error {
+	cmd := exec.CommandContext(ctx, "hg", "clone", "-U", "--", u.String(), dst)
 	return getRunCommand(cmd)
 }
 
-func (g *HgGetter) pull(dst string, u *url.URL) error {
-	cmd := exec.Command("hg", "pull")
+func (g *HgGetter) pull(ctx context.Context, dst string, u *url.URL) error {
+	cmd := exec.CommandContext(ctx, "hg", "pull")
 	cmd.Dir = dst
 	return getRunCommand(cmd)
 }
@@ -115,7 +129,7 @@ func (g *HgGetter) pull(dst string, u *url.URL) error {
 func (g *HgGetter) update(ctx context.Context, dst string, u *url.URL, rev string) error {
 	args := []string{"update"}
 	if rev != "" {
-		args = append(args, rev)
+		args = append(args, "--", rev)
 	}
 
 	cmd := exec.CommandContext(ctx, "hg", args...)

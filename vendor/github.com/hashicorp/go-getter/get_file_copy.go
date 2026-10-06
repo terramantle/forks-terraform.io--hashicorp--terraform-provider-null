@@ -1,7 +1,11 @@
+// Copyright IBM Corp. 2015, 2025
+// SPDX-License-Identifier: MPL-2.0
+
 package getter
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 )
@@ -30,15 +34,22 @@ func Copy(ctx context.Context, dst io.Writer, src io.Reader) (int64, error) {
 }
 
 // copyReader copies from an io.Reader into a file, using umask to create the dst file
-func copyReader(dst string, src io.Reader, fmode, umask os.FileMode) error {
-	dstF, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, fmode)
+func copyReader(dst string, src io.Reader, fmode, umask os.FileMode, fileSizeLimit int64) error {
+	dstF, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, mode(fmode, umask))
 	if err != nil {
 		return err
 	}
-	defer dstF.Close()
+	defer func() { _ = dstF.Close() }()
+
+	if fileSizeLimit > 0 {
+		src = io.LimitReader(src, fileSizeLimit)
+	}
 
 	_, err = io.Copy(dstF, src)
 	if err != nil {
+		// Close & remove the file in case of partial write
+		_ = dstF.Close()
+		_ = os.Remove(dst)
 		return err
 	}
 
@@ -49,21 +60,34 @@ func copyReader(dst string, src io.Reader, fmode, umask os.FileMode) error {
 }
 
 // copyFile copies a file in chunks from src path to dst path, using umask to create the dst file
-func copyFile(ctx context.Context, dst, src string, fmode, umask os.FileMode) (int64, error) {
+func copyFile(ctx context.Context, dst, src string, disableSymlinks bool, fmode, umask os.FileMode) (int64, error) {
+	if disableSymlinks {
+		fileInfo, err := os.Lstat(src)
+		if err != nil {
+			return 0, fmt.Errorf("failed to check copy file source for symlinks: %w", err)
+		}
+		if fileInfo.Mode()&os.ModeSymlink == os.ModeSymlink {
+			return 0, ErrSymlinkCopy
+		}
+	}
+
 	srcF, err := os.Open(src)
 	if err != nil {
 		return 0, err
 	}
-	defer srcF.Close()
+	defer func() { _ = srcF.Close() }()
 
-	dstF, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, fmode)
+	dstF, err := os.OpenFile(dst, os.O_RDWR|os.O_CREATE|os.O_TRUNC, mode(fmode, umask))
 	if err != nil {
 		return 0, err
 	}
-	defer dstF.Close()
+	defer func() { _ = dstF.Close() }()
 
 	count, err := Copy(ctx, dstF, srcF)
 	if err != nil {
+		// Close & remove the file in case of partial write
+		_ = dstF.Close()
+		_ = os.Remove(dst)
 		return 0, err
 	}
 

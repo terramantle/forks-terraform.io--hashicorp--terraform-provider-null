@@ -1,4 +1,7 @@
-// +build windows
+// Copyright IBM Corp. 2015, 2025
+// SPDX-License-Identifier: MPL-2.0
+
+//go:build windows
 
 package getter
 
@@ -21,7 +24,7 @@ func (g *FileGetter) Get(dst string, u *url.URL) error {
 
 	// The source path must exist and be a directory to be usable.
 	if fi, err := os.Stat(path); err != nil {
-		return fmt.Errorf("source path error: %s", err)
+		return fmt.Errorf("source path error: %w", err)
 	} else if !fi.IsDir() {
 		return fmt.Errorf("source path must be a directory")
 	}
@@ -69,7 +72,7 @@ func (g *FileGetter) GetFile(dst string, u *url.URL) error {
 
 	// The source path must exist and be a directory to be usable.
 	if fi, err := os.Stat(path); err != nil {
-		return fmt.Errorf("source path error: %s", err)
+		return fmt.Errorf("source path error: %w", err)
 	} else if fi.IsDir() {
 		return fmt.Errorf("source path must be a file")
 	}
@@ -111,8 +114,14 @@ func (g *FileGetter) GetFile(dst string, u *url.URL) error {
 		}
 	}
 
+	var disableSymlinks bool
+
+	if g.client != nil && g.client.DisableSymlinks {
+		disableSymlinks = true
+	}
+
 	// Copy
-	_, err = copyFile(ctx, dst, path, 0666, g.client.umask())
+	_, err = copyFile(ctx, dst, path, disableSymlinks, 0666, g.client.umask())
 	return err
 }
 

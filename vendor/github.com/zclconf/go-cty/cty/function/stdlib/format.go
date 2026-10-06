@@ -6,7 +6,7 @@ import (
 	"math/big"
 	"strings"
 
-	"github.com/apparentlymart/go-textseg/textseg"
+	"github.com/apparentlymart/go-textseg/v13/textseg"
 
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/convert"
@@ -18,6 +18,7 @@ import (
 //go:generate gofmt -w format_fsm.go
 
 var FormatFunc = function.New(&function.Spec{
+	Description: `Constructs a string by applying formatting verbs to a series of arguments, using a similar syntax to the C function \"printf\".`,
 	Params: []function.Parameter{
 		{
 			Name: "format",
@@ -45,6 +46,7 @@ var FormatFunc = function.New(&function.Spec{
 })
 
 var FormatListFunc = function.New(&function.Spec{
+	Description: `Constructs a list of strings by applying formatting verbs to a series of arguments, using a similar syntax to the C function \"printf\".`,
 	Params: []function.Parameter{
 		{
 			Name: "format",
@@ -80,10 +82,17 @@ var FormatListFunc = function.New(&function.Spec{
 		lenChooser := -1
 		iterators := make([]cty.ElementIterator, len(args))
 		singleVals := make([]cty.Value, len(args))
+		unknowns := make([]bool, len(args))
 		for i, arg := range args {
 			argTy := arg.Type()
 			switch {
 			case (argTy.IsListType() || argTy.IsSetType() || argTy.IsTupleType()) && !arg.IsNull():
+				if !argTy.IsTupleType() && !(arg.IsKnown() && arg.Length().IsKnown()) {
+					// We can't iterate this one at all yet then, so we can't
+					// yet produce a result.
+					unknowns[i] = true
+					continue
+				}
 				thisLen := arg.LengthInt()
 				if iterLen == -1 {
 					iterLen = thisLen
@@ -98,9 +107,25 @@ var FormatListFunc = function.New(&function.Spec{
 						)
 					}
 				}
+				if !arg.IsKnown() {
+					// We allowed an unknown tuple value to fall through in
+					// our initial check above so that we'd be able to run
+					// the above error checks against it, but we still can't
+					// iterate it if the checks pass.
+					unknowns[i] = true
+					continue
+				}
 				iterators[i] = arg.ElementIterator()
+			case arg == cty.DynamicVal:
+				unknowns[i] = true
 			default:
 				singleVals[i] = arg
+			}
+		}
+
+		for _, isUnk := range unknowns {
+			if isUnk {
+				return cty.UnknownVal(retType), nil
 			}
 		}
 

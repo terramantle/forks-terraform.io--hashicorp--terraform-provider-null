@@ -7,8 +7,8 @@ import (
 	"github.com/hashicorp/terraform/tfdiags"
 	"github.com/zclconf/go-cty/cty"
 
-	"github.com/hashicorp/terraform/config/hcl2shim"
 	"github.com/hashicorp/terraform/configs/configschema"
+	"github.com/hashicorp/terraform/configs/hcl2shim"
 	"github.com/hashicorp/terraform/terraform"
 	ctyconvert "github.com/zclconf/go-cty/cty/convert"
 )
@@ -182,7 +182,11 @@ func (b *Backend) Configure(obj cty.Value) tfdiags.Diagnostics {
 // that should be populated enough to appease the not-yet-updated functionality
 // in this package. This should be removed once everything is updated.
 func (b *Backend) shimConfig(obj cty.Value) *terraform.ResourceConfig {
-	shimMap := hcl2shim.ConfigValueFromHCL2(obj).(map[string]interface{})
+	shimMap, ok := hcl2shim.ConfigValueFromHCL2(obj).(map[string]interface{})
+	if !ok {
+		// If the configVal was nil, we still want a non-nil map here.
+		shimMap = map[string]interface{}{}
+	}
 	return &terraform.ResourceConfig{
 		Config: shimMap,
 		Raw:    shimMap,

@@ -1,3 +1,6 @@
+// Copyright IBM Corp. 2015, 2025
+// SPDX-License-Identifier: MPL-2.0
+
 // getter is a package for downloading files or directories from a variety of
 // protocols.
 //
@@ -67,6 +70,7 @@ func init() {
 	Getters = map[string]Getter{
 		"file":  new(FileGetter),
 		"git":   new(GitGetter),
+		"gcs":   new(GCSGetter),
 		"hg":    new(HgGetter),
 		"s3":    new(S3Getter),
 		"http":  httpGetter,
